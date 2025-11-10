@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { formatPhoneNumber, formatAddress, formatName } from '@/lib/format'
+import { Version } from '@/components/Version'
 
 interface CustomerFormData {
   name: string
@@ -241,6 +242,7 @@ export default function EditCustomerPage({
           </div>
         </div>
       </form>
+      <Version />
     </div>
   )
 }

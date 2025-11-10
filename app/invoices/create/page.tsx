@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { InvoiceForm } from '@/components/invoices/InvoiceForm'
+import { Version } from '@/components/Version'
 
 export default function CreateInvoicePage() {
   const router = useRouter()
@@ -32,6 +33,7 @@ export default function CreateInvoicePage() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-900">Create Invoice</h1>
       <InvoiceForm onSubmit={handleSubmit} defaultHourlyRate={100} />
+      <Version />
     </div>
   )
 }

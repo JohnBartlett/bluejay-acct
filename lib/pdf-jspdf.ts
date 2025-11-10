@@ -1,5 +1,8 @@
 import { jsPDF } from 'jspdf'
 import { Invoice, Customer, Company, InvoiceItem } from '@prisma/client'
+import { getPrintConfig } from './invoice-config-loader'
+import { formatInvoiceDate } from './date-formatter'
+import { formatCurrency } from './currency-formatter'
 
 interface InvoiceWithRelations extends Invoice {
   customer: Customer
@@ -22,23 +25,31 @@ export async function generateInvoicePDF(invoice: InvoiceWithRelations): Promise
     throw new Error('Invoice items are required')
   }
 
+  const config = getPrintConfig()
+
+  // Initialize PDF with config settings
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: config.layout.orientation,
     unit: 'mm',
-    format: 'letter',
+    format: config.layout.pageSize as 'letter' | 'a4',
   })
+
+  // Set PDF metadata if configured
+  if (config.print?.pdfMetadata) {
+    doc.setProperties({
+      title: config.print.pdfMetadata.title,
+      author: config.print.pdfMetadata.author,
+      subject: config.print.pdfMetadata.subject,
+      keywords: config.print.pdfMetadata.keywords.join(', '),
+    })
+  }
 
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 20
+  const margin = config.layout.margin
   const contentWidth = pageWidth - 2 * margin
   let yPosition = margin
-
-  // Color scheme (RGB values 0-255)
-  const primaryColor = [41, 99, 235] // Blue-600
-  const darkGray = [31, 41, 55] // Gray-800
-  const lightGray = [243, 244, 246] // Gray-100
-  const borderGray = [229, 231, 235] // Gray-200
+  let currentPage = 1
 
   // Helper function to add text with word wrapping
   const addText = (text: string, x: number, y: number, maxWidth: number, fontSize: number = 10, fontStyle: string = 'normal', color?: number[]) => {
@@ -54,7 +65,6 @@ export async function generateInvoicePDF(invoice: InvoiceWithRelations): Promise
       
       const lines = doc.splitTextToSize(textStr, maxWidth)
       if (Array.isArray(lines) && lines.length > 0) {
-        // Render each line separately to avoid array issues
         const lineHeight = fontSize * 0.35
         lines.forEach((line, index) => {
           doc.text(line, x, y + (index * lineHeight))
@@ -78,463 +88,493 @@ export async function generateInvoicePDF(invoice: InvoiceWithRelations): Promise
   // Helper function to format address with proper line breaks
   const formatAddress = (address: string | null): string[] => {
     if (!address) return []
-    // Split by newlines or common separators
     return address.split(/\n|\\n/).filter(line => line.trim())
   }
 
-  // Header section with logo
-  const headerHeight = 32
-  drawRect(margin, margin, contentWidth, headerHeight, lightGray)
-  
-  // Logo (jfB) - styled text logo in top left - larger, but fits within header box
-  const logoX = margin + 5
-  const logoSize = 12 // Reduced slightly to ensure it fits: headerHeight is 32, need padding
-  const logoY = margin + (headerHeight - logoSize * 2) / 2 // Center vertically within header box
-  
-  // Draw square background (simpler and more compatible)
-  doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-  doc.rect(logoX, logoY, logoSize * 2, logoSize * 2, 'F')
-  
-  // Draw white text on blue square - larger font
-  doc.setFontSize(10) // Adjusted for logo size
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(255, 255, 255)
-  doc.text('jfB', logoX + logoSize - 3, logoY + logoSize + 1.5) // Centered in logo square
-  doc.setTextColor(0, 0, 0) // Reset to black
-  
-  // Company name - positioned next to logo
-  doc.setFontSize(16)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
-  const companyNameX = logoX + logoSize * 2 + 8
-  yPosition = margin + 8
-  doc.text(invoice.company.name || 'Company Name', companyNameX, yPosition)
-  doc.setTextColor(0, 0, 0) // Reset to black
-  
-  // Company details - properly formatted with line breaks
-  yPosition += 6
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
-  
-  const companyAddressLines = formatAddress(invoice.company.address)
-  companyAddressLines.forEach((line) => {
-    doc.text(line.trim(), companyNameX, yPosition)
-    yPosition += 4
-  })
-  
-  if (invoice.company.email) {
-    doc.text(invoice.company.email, companyNameX, yPosition)
-    yPosition += 4
-  }
-  if (invoice.company.phone) {
-    // Format phone number to (XXX) XXX-XXXX format
-    const phoneDigits = invoice.company.phone.replace(/\D/g, '')
-    const formattedPhone = phoneDigits.length === 10
+  // Helper function to format phone number
+  const formatPhoneNumber = (phone: string | null): string => {
+    if (!phone) return ''
+    const phoneDigits = phone.replace(/\D/g, '')
+    return phoneDigits.length === 10
       ? `(${phoneDigits.slice(0, 3)}) ${phoneDigits.slice(3, 6)}-${phoneDigits.slice(6)}`
-      : invoice.company.phone
-    doc.text(formattedPhone, companyNameX, yPosition)
+      : phone
   }
 
-  // Invoice title and number (right aligned in header) - consistent typography
-  doc.setFontSize(18)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
-  doc.text('INVOICE', pageWidth - margin - 5, margin + 8, { align: 'right' as const })
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
-  doc.text(`#${invoice.invoiceNumber}`, pageWidth - margin - 5, margin + 15, { align: 'right' as const })
-  
-  // Invoice dates - more compact
-  const invoiceDate = new Date(invoice.date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-  doc.setFontSize(8)
-  doc.text(`Invoice Date: ${invoiceDate}`, pageWidth - margin - 5, margin + 21, { align: 'right' as const })
-  
-  if (invoice.dueDate) {
-    const dueDate = new Date(invoice.dueDate).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-    doc.text(`Due Date: ${dueDate}`, pageWidth - margin - 5, margin + 26, { align: 'right' as const })
-  }
-
-  doc.setTextColor(0, 0, 0) // Reset to black
-  yPosition = margin + headerHeight + 10
-
-  // Bill To section - properly formatted with shaded box
-  const billToWidth = contentWidth / 2 - 5
-  const billToStartY = yPosition
-  
-  // First, calculate all content to determine height needed
-  let billToY = billToStartY + 12 // Start position for content
-  
-  // Calculate customer name height
-  const customerNameHeight = invoice.customer.name 
-    ? (9 * 0.35) // Approximate height for one line
-    : 0
-  
-  billToY += customerNameHeight + 2.5
-  
-  // Calculate address lines height
-  const customerAddressLines = formatAddress(invoice.customer.address)
-  let addressHeight = 0
-  customerAddressLines.forEach(() => {
-    addressHeight += (8 * 0.35) + 1.5 // Line height + spacing
-  })
-  billToY += addressHeight
-  
-  // Calculate email height
-  if (invoice.customer.email) {
-    billToY += (8 * 0.35) + 1.5
-  }
-  
-  // Calculate phone height
-  if (invoice.customer.phone) {
-    billToY += (8 * 0.35)
-  }
-  
-  // Calculate total height needed
-  const billToHeight = billToY - billToStartY + 5 // Add bottom padding
-  
-  // Draw shaded box first
-  drawRect(margin, billToStartY, billToWidth, billToHeight, [250, 250, 250])
-  
-  // Now draw all text content on top of the box
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
-  doc.text('BILL TO:', margin + 5, billToStartY + 7)
-  
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(0, 0, 0)
-  billToY = billToStartY + 12
-  
-  // Customer name
-  if (invoice.customer.name) {
-    const nameHeight = addText(invoice.customer.name, margin + 5, billToY, billToWidth - 10, 9)
-    billToY += nameHeight + 2.5
-  }
-  
-  // Customer address - properly formatted with tighter spacing
-  customerAddressLines.forEach((line) => {
-    if (line.trim()) {
-      const lineHeight = addText(line.trim(), margin + 5, billToY, billToWidth - 10, 8)
-      billToY += lineHeight + 1.5
-    }
-  })
-  
-  if (invoice.customer.email) {
-    const emailHeight = addText(invoice.customer.email, margin + 5, billToY, billToWidth - 10, 8)
-    billToY += emailHeight + 1.5
-  }
-  
-  // Customer phone number - added to BILL TO block
-  if (invoice.customer.phone) {
-    // Format phone number to (XXX) XXX-XXXX format
-    const phoneDigits = invoice.customer.phone.replace(/\D/g, '')
-    const formattedPhone = phoneDigits.length === 10
-      ? `(${phoneDigits.slice(0, 3)}) ${phoneDigits.slice(3, 6)}-${phoneDigits.slice(6)}`
-      : invoice.customer.phone
-    addText(formattedPhone, margin + 5, billToY, billToWidth - 10, 8)
-  }
-  
-  yPosition = billToStartY + billToHeight + 8
-
-  // Table header with colored background
-  const headerY = yPosition
-  const headerRowHeight = 8
-  drawRect(margin, headerY, contentWidth, headerRowHeight, primaryColor)
-  
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(255, 255, 255) // White text on colored background
-  doc.text('Type', margin + 3, headerY + 6) // Type first
-  doc.text('Description', margin + 35, headerY + 6)
-  doc.text('Qty/Hrs', margin + 95, headerY + 6, { align: 'right' as const })
-  doc.text('Rate/Price', margin + 125, headerY + 6, { align: 'right' as const })
-  doc.text('Amount', pageWidth - margin - 3, headerY + 6, { align: 'right' as const })
-  doc.setTextColor(0, 0, 0) // Reset to black
-  
-  yPosition = headerY + headerRowHeight + 2
-
-  // Invoice items with alternating row colors
-  doc.setFont('helvetica', 'normal')
-  let rowIndex = 0
-  invoice.items.forEach((item) => {
-    // Check if we need a new page
-    if (yPosition > pageHeight - 80) {
-      doc.addPage()
-      yPosition = margin
-      // Redraw table header on new page
-      drawRect(margin, yPosition, contentWidth, headerRowHeight, primaryColor)
+  // Helper function to add page numbers
+  const addPageNumber = () => {
+    if (config.print?.includePageNumbers) {
+      const totalPages = doc.getNumberOfPages()
+      const pageNumText = `Page ${currentPage} of ${totalPages}`
+      const position = config.print.pageNumberPosition || 'bottom-right'
+      
       doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+      
+      if (position === 'bottom-right') {
+        doc.text(pageNumText, pageWidth - margin - 5, pageHeight - 10, { align: 'right' as const })
+      } else if (position === 'bottom-left') {
+        doc.text(pageNumText, margin + 5, pageHeight - 10)
+      } else if (position === 'bottom-center') {
+        doc.text(pageNumText, pageWidth / 2, pageHeight - 10, { align: 'center' as const })
+      }
+    }
+  }
+
+  // Helper function to add watermark
+  const addWatermark = () => {
+    if (config.watermark?.enabled) {
+      const watermark = config.watermark
+      const centerX = pageWidth / 2
+      const centerY = pageHeight / 2
+      
+      // Calculate lighter color based on opacity
+      const alphaColor = watermark.color.map(c => Math.round(c + (255 - c) * (1 - watermark.opacity)))
+      
+      doc.setFontSize(watermark.fontSize)
       doc.setFont('helvetica', 'bold')
-      doc.setTextColor(255, 255, 255)
-      doc.text('Type', margin + 3, yPosition + 6) // Type first
-      doc.text('Description', margin + 35, yPosition + 6)
-      doc.text('Qty/Hrs', margin + 95, yPosition + 6, { align: 'right' as const })
-      doc.text('Rate/Price', margin + 125, yPosition + 6, { align: 'right' as const })
-      doc.text('Amount', pageWidth - margin - 3, yPosition + 6, { align: 'right' as const })
+      doc.setTextColor(alphaColor[0], alphaColor[1], alphaColor[2])
+      
+      // Rotate and draw watermark text
+      // jsPDF text method supports angle parameter
+      try {
+        doc.text(watermark.text, centerX, centerY, {
+          align: 'center' as const,
+          angle: watermark.rotation,
+        })
+      } catch (error) {
+        // Fallback if angle not supported - draw without rotation
+        console.warn('Watermark rotation not supported, drawing without rotation:', error)
+        doc.text(watermark.text, centerX, centerY, {
+          align: 'center' as const,
+        })
+      }
+      
       doc.setTextColor(0, 0, 0)
-      yPosition += headerRowHeight + 2
-      rowIndex = 0
     }
+  }
 
-    const itemStartY = yPosition
-    const baseRowHeight = 12
+  // Helper function to redraw table header on new page
+  const redrawTableHeader = () => {
+    const headerY = yPosition
+    const headerRowHeight = config.typography.tableHeader.size * 1.5
     
-    // Calculate total height needed for this item
-    let itemHeight = baseRowHeight
-    
-    // Description text (main) - moved right to make room for Type column
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'bold')
-    const descText = item.description || ''
-    const descHeight = addText(descText, margin + 35, yPosition + 7, 50, 8, 'bold') || 0
-    
-    // Long description if present - fixed spacing
-    let longDescHeight = 0
-    if (item.longDescription) {
-      doc.setFontSize(7)
-      doc.setFont('helvetica', 'italic')
-      doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
-      const longDescText = String(item.longDescription || '').trim()
-      if (longDescText) {
-        // Better spacing calculation - use actual line height
-        const longDescY = yPosition + 7 + (descHeight || 0) + 2 // 2mm spacing after description
-        longDescHeight = addText(longDescText, margin + 37, longDescY, 50, 7, 'italic', darkGray) || 0
-      }
-      doc.setFontSize(8)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(0, 0, 0)
+    if (config.table.headerBackground) {
+      drawRect(margin, headerY, contentWidth, headerRowHeight, config.table.headerBackground)
     }
     
-    // Date for time entries - fixed spacing to prevent overlap
-    let dateHeight = 0
-    if (item.type === 'TIME' && item.date) {
-      const itemDate = new Date(item.date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-      doc.setFontSize(7)
-      doc.setFont('helvetica', 'italic')
-      doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
-      // Calculate date Y position properly - after description and long description with proper spacing
-      const dateY = yPosition + 7 + (descHeight || 0) + (longDescHeight > 0 ? longDescHeight + 2 : 2) + 2
-      if (!isNaN(dateY)) {
-        doc.text(`Date: ${itemDate}`, margin + 37, dateY)
-        dateHeight = 3.5 // Actual height needed for date line
-      }
-      doc.setFontSize(8)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(0, 0, 0)
+    doc.setFontSize(config.typography.tableHeader.size)
+    doc.setFont('helvetica', config.typography.tableHeader.style)
+    const headerTextColor = config.table.headerTextColor || config.colors.darkGray
+    doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2])
+    
+    if (config.table.columns.includes('Service')) {
+      doc.text('Service', margin + 5, headerY + headerRowHeight * 0.7)
+    }
+    if (config.table.columns.includes('Hours')) {
+      const hoursX = config.table.columns.includes('Amount') 
+        ? pageWidth - margin - 60
+        : pageWidth - margin - 5
+      doc.text('Hours', hoursX, headerY + headerRowHeight * 0.7, { align: 'right' as const })
+    }
+    if (config.table.columns.includes('Amount')) {
+      doc.text('Amount', pageWidth - margin - 5, headerY + headerRowHeight * 0.7, { align: 'right' as const })
     }
     
-    // Calculate item height properly - base height + description + spacing + long desc + spacing + date
-    const totalContentHeight = 7 + (descHeight || 0) + (longDescHeight > 0 ? longDescHeight + 2 : 0) + (dateHeight > 0 ? dateHeight + 1 : 0) + 5
-    itemHeight = Math.max(baseRowHeight, isNaN(totalContentHeight) ? baseRowHeight : totalContentHeight)
-    
-    // Alternate row background color - draw full height
-    if (rowIndex % 2 === 0) {
-      drawRect(margin, yPosition, contentWidth, itemHeight, [255, 255, 255])
-    } else {
-      drawRect(margin, yPosition, contentWidth, itemHeight, lightGray)
-    }
-    
-    // Type badge - first column, vertically centered, unified black color
-    doc.setFontSize(7)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]) // Unified black/dark gray for all types
-    const typeY = yPosition + itemHeight / 2
-    if (!isNaN(typeY)) {
-      doc.text(item.type, margin + 3, typeY) // Moved to first column
-    }
     doc.setTextColor(0, 0, 0)
-    
-    // Redraw description on top of background - moved right
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'bold')
-    addText(descText, margin + 35, yPosition + 7, 50, 8, 'bold')
-    
-    if (item.longDescription) {
-      doc.setFontSize(7)
-      doc.setFont('helvetica', 'italic')
-      doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
-      const longDescText = String(item.longDescription || '').trim()
-      if (longDescText) {
-        // Use same calculation as above for consistency
-        const longDescY = yPosition + 7 + (descHeight || 0) + 2
-        addText(longDescText, margin + 37, longDescY, 50, 7, 'italic', darkGray)
+    yPosition = headerY + headerRowHeight + config.table.rowSpacing
+  }
+
+  // Helper function to check if new page needed
+  const checkNewPage = (requiredHeight: number, redrawHeader: boolean = false) => {
+    if (yPosition + requiredHeight > pageHeight - (margin + 20)) {
+      addPageNumber()
+      doc.addPage()
+      currentPage++
+      yPosition = margin
+      addWatermark()
+      if (redrawHeader) {
+        redrawTableHeader()
       }
-      doc.setFontSize(8)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(0, 0, 0)
+      return true
+    }
+    return false
+  }
+
+  // Add watermark to first page
+  addWatermark()
+
+  // Company Info section
+  if (config.sections.companyInfo) {
+    const companyNameX = margin
+    yPosition = margin
+    
+    // Company name
+    doc.setFontSize(config.typography.companyName.size)
+    doc.setFont('helvetica', config.typography.companyName.style)
+    doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+    doc.text(invoice.company.name || 'Company Name', companyNameX, yPosition)
+    yPosition += config.typography.companyName.size * 0.5
+    
+    // Company address
+    const companyAddressLines = formatAddress(invoice.company.address)
+    companyAddressLines.forEach((line) => {
+      doc.setFontSize(config.typography.body.size)
+      doc.setFont('helvetica', config.typography.body.style)
+      doc.text(line.trim(), companyNameX, yPosition)
+      yPosition += config.typography.body.size * 0.5
+    })
+    
+    // Company email
+    if (invoice.company.email) {
+      doc.setFontSize(config.typography.body.size)
+      doc.setFont('helvetica', config.typography.body.style)
+      doc.text(invoice.company.email, companyNameX, yPosition)
+      yPosition += config.typography.body.size * 0.5
     }
     
-    if (item.type === 'TIME' && item.date) {
-      const itemDate = new Date(item.date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-      doc.setFontSize(7)
-      doc.setFont('helvetica', 'italic')
-      doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
-      // Use same calculation as above for consistency
-      const dateY = yPosition + 7 + (descHeight || 0) + (longDescHeight > 0 ? longDescHeight + 2 : 2) + 2
-      if (!isNaN(dateY)) {
-        doc.text(`Date: ${itemDate}`, margin + 37, dateY)
-      }
-      doc.setFontSize(8)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(0, 0, 0)
+    // Company phone
+    if (invoice.company.phone) {
+      doc.setFontSize(config.typography.body.size)
+      doc.setFont('helvetica', config.typography.body.style)
+      doc.text(formatPhoneNumber(invoice.company.phone), companyNameX, yPosition)
+      yPosition += config.typography.body.size * 0.5
     }
+  }
+
+  // Invoice title and number (right aligned)
+  doc.setFontSize(config.typography.invoiceTitle.size)
+  doc.setFont('helvetica', config.typography.invoiceTitle.style)
+  doc.setTextColor(config.colors.primary[0], config.colors.primary[1], config.colors.primary[2])
+  doc.text('INVOICE', pageWidth - margin - 5, margin, { align: 'right' as const })
+  
+  doc.setFontSize(config.typography.invoiceNumber.size)
+  doc.setFont('helvetica', config.typography.invoiceNumber.style)
+  doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+  doc.text(`#${invoice.invoiceNumber}`, pageWidth - margin - 5, margin + config.typography.invoiceTitle.size * 0.5, { align: 'right' as const })
+
+  yPosition += config.layout.sectionSpacing
+
+  // Bill To section
+  if (config.sections.billTo) {
+    const billToStartY = yPosition
+    const billToWidth = contentWidth / 2 - 5
     
-    // Quantity/Hours - vertically centered
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    const qtyOrHrs = item.type === 'TIME' 
-      ? (item.hours ? (isNaN(item.hours) ? '0.00' : item.hours.toFixed(2)) : '0.00')
-      : (item.quantity ? (isNaN(item.quantity) ? '0.00' : item.quantity.toFixed(2)) : '0.00')
-    if (!isNaN(typeY)) {
-      doc.text(qtyOrHrs, margin + 95, typeY, { align: 'right' as const })
-    }
+    // Calculate height needed
+    let billToY = billToStartY + config.typography.body.size * 0.5
+    if (invoice.customer.name) billToY += config.typography.body.size * 0.5 + 2
+    const customerAddressLines = formatAddress(invoice.customer.address)
+    billToY += customerAddressLines.length * (config.typography.body.size * 0.5 + 1)
+    if (invoice.customer.email) billToY += config.typography.body.size * 0.5 + 1
+    if (invoice.customer.phone) billToY += config.typography.body.size * 0.5
     
-    // Rate/Price - vertically centered
-    const hourlyRate = item.hourlyRate && !isNaN(item.hourlyRate) ? item.hourlyRate : 0
-    const unitPrice = item.unitPrice && !isNaN(item.unitPrice) ? item.unitPrice : 0
-    const rateOrPrice = item.type === 'TIME'
-      ? `$${hourlyRate.toFixed(2)}`
-      : `$${unitPrice.toFixed(2)}`
-    if (!isNaN(typeY)) {
-      doc.text(rateOrPrice, margin + 125, typeY, { align: 'right' as const })
-    }
+    const billToHeight = billToY - billToStartY + 5
     
-    // Amount - bold for emphasis (standard for financial documents)
-    const amount = item.amount && !isNaN(item.amount) ? item.amount : 0
+    // Draw background box
+    drawRect(margin, billToStartY, billToWidth, billToHeight, config.colors.lightGray)
+    
+    // Bill To label
+    doc.setFontSize(config.typography.body.size)
     doc.setFont('helvetica', 'bold')
-    if (!isNaN(typeY)) {
-      doc.text(`$${amount.toFixed(2)}`, pageWidth - margin - 3, typeY, { align: 'right' as const })
+    doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+    doc.text('BILL TO:', margin + 5, billToStartY + config.typography.body.size * 0.5)
+    
+    // Customer name
+    billToY = billToStartY + config.typography.body.size * 1.2
+    doc.setFontSize(config.typography.body.size)
+    doc.setFont('helvetica', config.typography.body.style)
+    doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+    if (invoice.customer.name) {
+      addText(invoice.customer.name, margin + 5, billToY, billToWidth - 10, config.typography.body.size, config.typography.body.style, config.colors.darkGray)
+      billToY += config.typography.body.size * 0.5 + 2
     }
-    doc.setFont('helvetica', 'normal')
     
-    // Draw separation line between rows
-    const lineY = yPosition + itemHeight
-    doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2])
-    doc.setLineWidth(0.2)
-    doc.line(margin, lineY, pageWidth - margin, lineY)
+    // Customer address
+    customerAddressLines.forEach((line) => {
+      if (line.trim()) {
+        addText(line.trim(), margin + 5, billToY, billToWidth - 10, config.typography.body.size, config.typography.body.style, config.colors.darkGray)
+        billToY += config.typography.body.size * 0.5 + 1
+      }
+    })
     
-    // Increased spacing between items
-    yPosition += itemHeight + 3 // Increased from 1 to 3 for more margin
-    rowIndex++
-  })
+    // Customer email
+    if (invoice.customer.email) {
+      addText(invoice.customer.email, margin + 5, billToY, billToWidth - 10, config.typography.body.size, config.typography.body.style, config.colors.darkGray)
+      billToY += config.typography.body.size * 0.5 + 1
+    }
+    
+    // Customer phone
+    if (invoice.customer.phone) {
+      addText(formatPhoneNumber(invoice.customer.phone), margin + 5, billToY, billToWidth - 10, config.typography.body.size, config.typography.body.style, config.colors.darkGray)
+    }
+    
+    yPosition = billToStartY + billToHeight + config.layout.sectionSpacing
+  }
 
-  // Totals section with styled box - properly aligned
-  yPosition += 8
-  const totalsBoxWidth = 80
-  const totalsBoxX = pageWidth - margin - totalsBoxWidth
-  const totalsBoxHeight = 26 // Adjusted: 7 (top) + 5 (subtotal) + 5 (tax) + 6 (divider space) + 6 (total space) + 3 (bottom) = 32, but using 26 for compact
-  
-  // Draw totals box with border
-  doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2])
-  doc.setLineWidth(0.5)
-  doc.setFillColor(250, 250, 250)
-  doc.rect(totalsBoxX, yPosition, totalsBoxWidth, totalsBoxHeight, 'FD')
-  
-  let totalsY = yPosition + 7
-  
-  // Subtotal - properly aligned
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
-  doc.text('Subtotal:', totalsBoxX + 5, totalsY)
-  doc.setTextColor(0, 0, 0)
-  doc.text(`$${(invoice.subtotal || 0).toFixed(2)}`, pageWidth - margin - 5, totalsY, { align: 'right' as const })
-  totalsY += 5 // Reduced from 7 to 5 to bring Subtotal and Tax closer
+  // Invoice dates (right aligned)
+  if (config.sections.invoiceDates) {
+    let dateY = margin + config.typography.invoiceTitle.size * 0.5 + config.typography.invoiceNumber.size * 0.5 + 2
+    
+    doc.setFontSize(config.typography.body.size)
+    doc.setFont('helvetica', config.typography.body.style)
+    doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+    
+    const invoiceDateStr = formatInvoiceDate(invoice.date, config.dateFormat.format, config.dateFormat.locale)
+    doc.text(`Invoice Date: ${invoiceDateStr}`, pageWidth - margin - 5, dateY, { align: 'right' as const })
+    dateY += config.typography.body.size * 0.5 + 2
+    
+    if (invoice.dueDate) {
+      const dueDateStr = formatInvoiceDate(invoice.dueDate, config.dateFormat.format, config.dateFormat.locale)
+      doc.text(`Due Date: ${dueDateStr}`, pageWidth - margin - 5, dateY, { align: 'right' as const })
+    }
+  }
 
-  // Tax - properly aligned
-  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
-  doc.text('Tax:', totalsBoxX + 5, totalsY)
-  doc.setTextColor(0, 0, 0)
-  doc.text(`$${(invoice.tax || 0).toFixed(2)}`, pageWidth - margin - 5, totalsY, { align: 'right' as const })
-  totalsY += 6 // Increased from 4 to 6 for more margin above divider
+  // Items table
+  if (config.sections.itemsTable) {
+    checkNewPage(30)
+    
+    const headerY = yPosition
+    const headerRowHeight = config.typography.tableHeader.size * 1.5
+    
+    // Table header background
+    if (config.table.headerBackground) {
+      drawRect(margin, headerY, contentWidth, headerRowHeight, config.table.headerBackground)
+    }
+    
+    // Table header text
+    doc.setFontSize(config.typography.tableHeader.size)
+    doc.setFont('helvetica', config.typography.tableHeader.style)
+    const headerTextColor = config.table.headerTextColor || config.colors.darkGray
+    doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2])
+    
+    if (config.table.columns.includes('Service')) {
+      doc.text('Service', margin + 5, headerY + headerRowHeight * 0.7)
+    }
+    if (config.table.columns.includes('Hours')) {
+      // Position Hours column - right align, leave space for Amount
+      const hoursX = config.table.columns.includes('Amount') 
+        ? pageWidth - margin - 60  // Leave space for Amount column
+        : pageWidth - margin - 5
+      doc.text('Hours', hoursX, headerY + headerRowHeight * 0.7, { align: 'right' as const })
+    }
+    if (config.table.columns.includes('Amount')) {
+      doc.text('Amount', pageWidth - margin - 5, headerY + headerRowHeight * 0.7, { align: 'right' as const })
+    }
+    
+    doc.setTextColor(0, 0, 0)
+    yPosition = headerY + headerRowHeight + config.table.rowSpacing
 
-  // Divider line - more margin above
-  doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2])
-  doc.setLineWidth(0.5)
-  doc.line(totalsBoxX + 5, totalsY, pageWidth - margin - 5, totalsY)
-  totalsY += 6 // Increased from 4 to 6 for more margin above Total
+    // Invoice items
+    invoice.items.forEach((item, index) => {
+      checkNewPage(15, true) // Redraw header on new page
+      
+      const itemStartY = yPosition
+      const baseRowHeight = config.typography.body.size * 1.5
+      let itemHeight = baseRowHeight
+      
+      // Calculate item height based on content
+      if (item.longDescription) {
+        const longDescLines = doc.splitTextToSize(item.longDescription, 100)
+        itemHeight = Math.max(itemHeight, baseRowHeight + longDescLines.length * config.typography.body.size * 0.4)
+      }
+      
+      // Row background (if alternating rows enabled)
+      if (config.table.showAlternatingRows && index % 2 === 1) {
+        drawRect(margin, itemStartY, contentWidth, itemHeight, config.colors.lightGray)
+      }
+      
+      // Service column
+      if (config.table.columns.includes('Service')) {
+        doc.setFontSize(config.typography.body.size)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+        let serviceY = itemStartY + config.typography.body.size * 0.5
+        addText(item.description || '', margin + 5, serviceY, 100, config.typography.body.size, 'bold', config.colors.darkGray)
+        
+        if (item.longDescription) {
+          serviceY += config.typography.body.size * 0.5 + 1
+          doc.setFont('helvetica', 'italic')
+          addText(item.longDescription, margin + 5, serviceY, 100, config.typography.body.size * 0.9, 'italic', config.colors.darkGray)
+        }
+      }
+      
+      // Hours column
+      if (config.table.columns.includes('Hours')) {
+        doc.setFontSize(config.typography.body.size)
+        doc.setFont('helvetica', config.typography.body.style)
+        doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+        const hours = item.type === 'TIME' ? (item.hours || 0) : (item.quantity || 0)
+        const hoursX = config.table.columns.includes('Amount') 
+          ? pageWidth - margin - 60  // Leave space for Amount column
+          : pageWidth - margin - 5
+        doc.text(
+          hours.toFixed(config.currency.decimalPlaces),
+          hoursX,
+          itemStartY + config.typography.body.size * 0.5,
+          { align: 'right' as const }
+        )
+      }
+      
+      // Amount column
+      if (config.table.columns.includes('Amount')) {
+        doc.setFontSize(config.typography.body.size)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+        const amountStr = formatCurrency(item.amount || 0, config.currency)
+        doc.text(
+          amountStr,
+          pageWidth - margin - 5,
+          itemStartY + config.typography.body.size * 0.5,
+          { align: 'right' as const }
+        )
+      }
+      
+      // Draw border between rows
+      if (config.table.borderWidth && config.table.borderColor) {
+        doc.setDrawColor(config.table.borderColor[0], config.table.borderColor[1], config.table.borderColor[2])
+        doc.setLineWidth(config.table.borderWidth)
+        doc.line(margin, itemStartY + itemHeight, pageWidth - margin, itemStartY + itemHeight)
+      }
+      
+      yPosition += itemHeight + config.table.rowSpacing
+    })
+    
+    yPosition += config.layout.sectionSpacing
+  }
 
-  // Total - bold and larger, properly aligned
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
-  doc.text('Total:', totalsBoxX + 5, totalsY)
-  doc.text(`$${(invoice.total || 0).toFixed(2)}`, pageWidth - margin - 5, totalsY, { align: 'right' as const })
-  doc.setTextColor(0, 0, 0)
-  
-  yPosition += totalsBoxHeight + 8
+  // Totals section
+  if (config.sections.totals) {
+    checkNewPage(30)
+    
+    const totalsBoxWidth = 80
+    const totalsBoxX = pageWidth - margin - totalsBoxWidth
+    const totalsBoxHeight = 25
+    
+    // Draw totals box
+    if (config.table.borderWidth && config.table.borderColor) {
+      doc.setDrawColor(config.table.borderColor[0], config.table.borderColor[1], config.table.borderColor[2])
+      doc.setLineWidth(config.table.borderWidth)
+      doc.setFillColor(config.colors.lightGray[0], config.colors.lightGray[1], config.colors.lightGray[2])
+      doc.rect(totalsBoxX, yPosition, totalsBoxWidth, totalsBoxHeight, 'FD')
+    }
+    
+    let totalsY = yPosition + config.typography.body.size * 0.8
+    
+    // Subtotal
+    doc.setFontSize(config.typography.body.size)
+    doc.setFont('helvetica', config.typography.body.style)
+    doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+    doc.text('Subtotal:', totalsBoxX + 5, totalsY)
+    doc.text(
+      formatCurrency(invoice.subtotal || 0, config.currency),
+      pageWidth - margin - 5,
+      totalsY,
+      { align: 'right' as const }
+    )
+    totalsY += config.typography.body.size * 0.8
+    
+    // Tax
+    doc.text('Tax:', totalsBoxX + 5, totalsY)
+    doc.text(
+      formatCurrency(invoice.tax || 0, config.currency),
+      pageWidth - margin - 5,
+      totalsY,
+      { align: 'right' as const }
+    )
+    totalsY += config.typography.body.size * 0.8 + 2
+    
+    // Divider
+    if (config.table.borderWidth && config.table.borderColor) {
+      doc.setDrawColor(config.table.borderColor[0], config.table.borderColor[1], config.table.borderColor[2])
+      doc.setLineWidth(config.table.borderWidth)
+      doc.line(totalsBoxX + 5, totalsY, pageWidth - margin - 5, totalsY)
+      totalsY += config.typography.body.size * 0.8
+    }
+    
+    // Total
+    doc.setFontSize(config.typography.total.size)
+    doc.setFont('helvetica', config.typography.total.style)
+    doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+    doc.text('Total:', totalsBoxX + 5, totalsY)
+    doc.text(
+      formatCurrency(invoice.total || 0, config.currency),
+      pageWidth - margin - 5,
+      totalsY,
+      { align: 'right' as const }
+    )
+    
+    yPosition += totalsBoxHeight + config.layout.sectionSpacing
+  }
 
-  // Notes section with styled box - perfectly aligned with table above, more compact
-  if (invoice.notes && invoice.notes.trim()) {
+  // Notes section
+  if (config.sections.notes && invoice.notes && invoice.notes.trim()) {
+    checkNewPage(20)
+    
     const notesText = String(invoice.notes).trim()
     const notesLines = doc.splitTextToSize(notesText, contentWidth - 10)
-    const notesBoxHeight = Math.max(15, notesLines.length * 3.5 + 6) // Reduced spacing (4 to 3.5, 8 to 6)
+    const notesBoxHeight = Math.max(15, notesLines.length * config.typography.body.size * 0.5 + 10)
     
-    // Notes box with border - aligned exactly with table (same margin and width)
-    doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2])
-    doc.setLineWidth(0.5)
-    doc.setFillColor(252, 252, 252)
-    doc.rect(margin, yPosition, contentWidth, notesBoxHeight, 'FD')
+    // Notes box
+    if (config.table.borderWidth && config.table.borderColor) {
+      doc.setDrawColor(config.table.borderColor[0], config.table.borderColor[1], config.table.borderColor[2])
+      doc.setLineWidth(config.table.borderWidth)
+      doc.setFillColor(config.colors.lightGray[0], config.colors.lightGray[1], config.colors.lightGray[2])
+      doc.rect(margin, yPosition, contentWidth, notesBoxHeight, 'FD')
+    }
     
-    doc.setFontSize(8)
+    // Notes label
+    doc.setFontSize(config.typography.body.size)
     doc.setFont('helvetica', 'bold')
-    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
-    doc.text('Notes:', margin + 5, yPosition + 5) // Reduced from 6 to 5
+    doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+    doc.text('Notes:', margin + 5, yPosition + config.typography.body.size * 0.8)
     
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(0, 0, 0)
-    addText(notesText, margin + 5, yPosition + 9, contentWidth - 10, 8) // Reduced from 11 to 9
-    yPosition += notesBoxHeight + 5 // Reduced from 8 to 5 for more compact spacing
+    // Notes content
+    doc.setFont('helvetica', config.typography.body.style)
+    addText(notesText, margin + 5, yPosition + config.typography.body.size * 1.2, contentWidth - 10, config.typography.body.size, config.typography.body.style, config.colors.darkGray)
+    
+    yPosition += notesBoxHeight + config.layout.sectionSpacing
   }
 
-  // Footer with subtle line and attribution - increased bottom margin
-  const footerY = pageHeight - 20 // Increased from 15 to 20 for better spacing
-  doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2])
-  doc.setLineWidth(0.3)
-  doc.line(margin, footerY, pageWidth - margin, footerY)
-  
-  // Thank you message - increased spacing
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
-  doc.text(
-    'Thank you for your business!',
-    pageWidth / 2,
-    footerY + 6, // Increased from 5 to 6
-    { align: 'center' as const }
-  )
-  
-  // Made with BlueJay Accounting footer - increased spacing
-  doc.setFontSize(7)
-  doc.setFont('helvetica', 'italic')
-  doc.setTextColor(156, 163, 175) // Gray-400 - individual RGB values, not array
-  doc.text(
-    'Made with BlueJay Accounting © 2025',
-    pageWidth / 2,
-    footerY + 11, // Increased from 9 to 11
-    { align: 'center' as const }
-  )
-  doc.setTextColor(0, 0, 0)
+  // Footer
+  if (config.sections.footer && config.footer) {
+    checkNewPage(15)
+    
+    if (config.footer.showThankYou) {
+      doc.setFontSize(config.typography.body.size)
+      doc.setFont('helvetica', config.typography.body.style)
+      doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+      doc.text(
+        'Thank you for your business!',
+        pageWidth / 2,
+        yPosition,
+        { align: 'center' as const }
+      )
+      yPosition += config.typography.body.size * 0.8
+    }
+    
+    if (config.footer.text) {
+      doc.setFontSize(config.typography.body.size * 0.9)
+      doc.setFont('helvetica', 'italic')
+      doc.setTextColor(config.colors.darkGray[0], config.colors.darkGray[1], config.colors.darkGray[2])
+      doc.text(
+        config.footer.text,
+        pageWidth / 2,
+        yPosition,
+        { align: 'center' as const }
+      )
+    }
+  }
+
+  // Add page numbers to all pages
+  const totalPages = doc.getNumberOfPages()
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i)
+    currentPage = i
+    addPageNumber()
+    if (i === 1) {
+      addWatermark() // Add watermark to first page
+    }
+  }
 
   // Convert to buffer
   const pdfArrayBuffer = doc.output('arraybuffer')

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Plus, Search, Edit, Trash2, Mail, Phone, MapPin } from 'lucide-react'
 import { formatPhoneNumber } from '@/lib/format'
+import { Version } from '@/components/Version'
 
 interface Customer {
   id: string
@@ -161,6 +162,7 @@ export default function CustomersPage() {
           </div>
         )}
       </div>
+      <Version />
     </div>
   )
 }

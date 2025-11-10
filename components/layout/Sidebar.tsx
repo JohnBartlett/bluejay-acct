@@ -12,13 +12,12 @@ import {
   Building2,
   FileText,
   BarChart3,
-  Users,
-  Gift,
   Plus,
   ChevronDown,
   ChevronUp,
   Settings,
 } from 'lucide-react'
+import { Version } from '@/components/Version'
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
@@ -53,8 +52,6 @@ const menuItems = [
   { icon: Building2, label: 'Banking', href: '/banking' },
   { icon: FileText, label: 'Payroll', href: '/payroll' },
   { icon: BarChart3, label: 'Reports', href: '/reports' },
-  { icon: Users, label: 'Wave Advisors', href: '/advisors' },
-  { icon: Gift, label: 'Perks', href: '/perks', badge: 'New' },
   { icon: Settings, label: 'Settings', href: '/settings' },
 ]
 
@@ -160,6 +157,7 @@ export function Sidebar() {
           })}
         </ul>
       </nav>
+      <Version />
     </div>
   )
 }

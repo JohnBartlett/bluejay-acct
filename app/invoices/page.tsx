@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Search, Plus, Eye, Edit, Trash2, Mail, Printer } from 'lucide-react'
+import { Version } from '@/components/Version'
 
 interface Invoice {
   id: string
@@ -259,6 +260,7 @@ export default function InvoicesPage() {
           </div>
         )}
       </div>
+      <Version />
     </div>
   )
 }

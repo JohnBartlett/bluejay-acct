@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState, useEffect, use } from 'react'
 import { InvoiceForm } from '@/components/invoices/InvoiceForm'
+import { Version } from '@/components/Version'
 
 export default function EditInvoicePage({
   params,
@@ -83,6 +84,7 @@ export default function EditInvoicePage({
         defaultHourlyRate={100}
         onSubmit={handleSubmit}
       />
+      <Version />
     </div>
   )
 }

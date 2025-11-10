@@ -1,0 +1,95 @@
+{
+  "colors": {
+    "primary": [41, 99, 235],
+    "darkGray": [45, 45, 45],
+    "lightGray": [247, 248, 250],
+    "borderGray": [224, 224, 224]
+  },
+  "layout": {
+    "pageSize": "letter",
+    "orientation": "portrait",
+    "margin": 24,
+    "headerHeight": 40,
+    "sectionSpacing": 14
+  },
+  "typography": {
+    "companyName": { "size": 14, "style": "bold" },
+    "invoiceTitle": { "size": 22, "style": "bold" },
+    "invoiceNumber": { "size": 10, "style": "normal" },
+    "body": { "size": 9, "style": "normal" },
+    "tableHeader": { "size": 9, "style": "bold" },
+    "total": { "size": 11, "style": "bold" }
+  },
+  "logo": {
+    "enabled": false,
+    "text": "",
+    "size": 0,
+    "position": { "x": 0, "y": 0 },
+    "backgroundColor": ""
+  },
+  "sections": {
+    "logo": false,
+    "companyInfo": true,
+    "billTo": true,
+    "invoiceDates": true,
+    "itemsTable": true,
+    "totals": true,
+    "notes": true,
+    "footer": false
+  },
+  "table": {
+    "columns": ["Service", "Hours", "Amount"],
+    "showAlternatingRows": false,
+    "rowSpacing": 4,
+    "borderWidth": 0.5,
+    "borderColor": [224, 224, 224],
+    "headerBackground": [41, 99, 235],
+    "headerTextColor": [255, 255, 255]
+  },
+  "dateFormat": {
+    "format": "MMMM d, yyyy",
+    "locale": "en-US"
+  },
+  "currency": {
+    "symbol": "$",
+    "decimalPlaces": 2,
+    "locale": "en-US",
+    "placement": "before"
+  },
+  "footer": {
+    "text": "",
+    "showThankYou": false
+  },
+  "print": {
+    "includePageNumbers": true,
+    "pageNumberPosition": "bottom-right",
+    "dpi": 300,
+    "bleed": 0,
+    "backgroundPrint": true,
+    "printHeader": true,
+    "printFooter": true,
+    "pdfMetadata": {
+      "title": "Invoice",
+      "author": "John F Bartlett",
+      "subject": "Professional Services Invoice",
+      "keywords": ["invoice", "network services", "IT consulting", "John F Bartlett"]
+    }
+  },
+  "export": {
+    "fileNamePattern": "Invoice_{invoiceNumber}_{clientName}.pdf",
+    "includeTimestamp": true,
+    "timestampFormat": "yyyy-MM-dd_HHmmss",
+    "openAfterExport": true,
+    "compression": "medium"
+  },
+  "watermark": {
+    "enabled": false,
+    "text": "PAID",
+    "opacity": 0.1,
+    "rotation": -30,
+    "fontSize": 48,
+    "color": [200, 200, 200],
+    "position": "center"
+  }
+}
+

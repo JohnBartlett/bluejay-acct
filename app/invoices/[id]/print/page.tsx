@@ -4,6 +4,9 @@ import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { Printer, Download, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import { getDisplayConfig } from '@/lib/invoice-config-loader'
+import { formatInvoiceDate } from '@/lib/date-formatter'
+import { formatCurrency } from '@/lib/currency-formatter'
 
 interface InvoiceItem {
   id: string
@@ -47,6 +50,7 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   const { id } = use(params)
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [loading, setLoading] = useState(true)
+  const config = getDisplayConfig()
 
   useEffect(() => {
     fetchInvoice()
@@ -70,20 +74,13 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
     window.print()
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount)
+  const formatCurrencyAmount = (amount: number) => {
+    return formatCurrency(amount, config.currency)
   }
 
-  const formatDate = (dateString: string | null) => {
+  const formatDateString = (dateString: string | null) => {
     if (!dateString) return '-'
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
+    return formatInvoiceDate(dateString, config.dateFormat.format, config.dateFormat.locale)
   }
 
   if (loading) {
@@ -125,162 +122,357 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Invoice content */}
-      <div className="invoice-print-container bg-white p-8 md:p-12 max-w-4xl mx-auto">
+      <div 
+        className="invoice-print-container bg-white max-w-4xl mx-auto"
+        style={{
+          padding: `${config.layout.margin}px`,
+        }}
+      >
         {/* Header */}
-        <div className="flex justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {invoice.company.name}
-            </h1>
-            {invoice.company.address && (
-              <p className="text-gray-600 mt-2">{invoice.company.address}</p>
-            )}
-            {invoice.company.email && (
-              <p className="text-gray-600">{invoice.company.email}</p>
-            )}
-            {invoice.company.phone && (
-              <p className="text-gray-600">{invoice.company.phone}</p>
-            )}
+        {config.sections.companyInfo && (
+          <div className="flex justify-between mb-8">
+            <div>
+              <h1 
+                className="font-bold"
+                style={{
+                  fontSize: `${config.typography.companyName.size}px`,
+                  fontWeight: config.typography.companyName.style === 'bold' ? 'bold' : 'normal',
+                  color: `rgb(${config.colors.darkGray.join(',')})`,
+                }}
+              >
+                {invoice.company.name}
+              </h1>
+              {invoice.company.address && (
+                <p 
+                  className="mt-2"
+                  style={{
+                    fontSize: `${config.typography.body.size}px`,
+                    color: `rgb(${config.colors.darkGray.join(',')})`,
+                  }}
+                >
+                  {invoice.company.address}
+                </p>
+              )}
+              {invoice.company.email && (
+                <p 
+                  style={{
+                    fontSize: `${config.typography.body.size}px`,
+                    color: `rgb(${config.colors.darkGray.join(',')})`,
+                  }}
+                >
+                  {invoice.company.email}
+                </p>
+              )}
+              {invoice.company.phone && (
+                <p 
+                  style={{
+                    fontSize: `${config.typography.body.size}px`,
+                    color: `rgb(${config.colors.darkGray.join(',')})`,
+                  }}
+                >
+                  {invoice.company.phone}
+                </p>
+              )}
+            </div>
+            <div className="text-right">
+              <h2 
+                className="font-bold"
+                style={{
+                  fontSize: `${config.typography.invoiceTitle.size}px`,
+                  fontWeight: config.typography.invoiceTitle.style === 'bold' ? 'bold' : 'normal',
+                  color: `rgb(${config.colors.primary.join(',')})`,
+                }}
+              >
+                INVOICE
+              </h2>
+              <p 
+                className="mt-2"
+                style={{
+                  fontSize: `${config.typography.invoiceNumber.size}px`,
+                  color: `rgb(${config.colors.darkGray.join(',')})`,
+                }}
+              >
+                #{invoice.invoiceNumber}
+              </p>
+            </div>
           </div>
-          <div className="text-right">
-            <h2 className="text-2xl font-bold text-gray-900">INVOICE</h2>
-            <p className="text-gray-600 mt-2 text-lg">#{invoice.invoiceNumber}</p>
-          </div>
-        </div>
+        )}
 
         {/* Bill To */}
-        <div className="grid grid-cols-2 gap-8 mb-8">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase">
-              Bill To:
-            </h3>
-            <p className="font-medium text-gray-900 text-lg">
-              {invoice.customer.name}
-            </p>
-            {invoice.customer.address && (
-              <p className="text-gray-600 mt-1">{invoice.customer.address}</p>
-            )}
-            {invoice.customer.email && (
-              <p className="text-gray-600">{invoice.customer.email}</p>
-            )}
-          </div>
-          <div className="text-right">
-            <div className="text-gray-600 mb-2">
-              <span className="font-semibold">Invoice Date:</span>{' '}
-              {formatDate(invoice.date)}
+        {config.sections.billTo && (
+          <div className="grid grid-cols-2 gap-8 mb-8">
+            <div>
+              <h3 
+                className="font-semibold mb-2 uppercase"
+                style={{
+                  fontSize: `${config.typography.body.size}px`,
+                  color: `rgb(${config.colors.darkGray.join(',')})`,
+                }}
+              >
+                Bill To:
+              </h3>
+              <p 
+                className="font-medium"
+                style={{
+                  fontSize: `${config.typography.body.size}px`,
+                  color: `rgb(${config.colors.darkGray.join(',')})`,
+                }}
+              >
+                {invoice.customer.name}
+              </p>
+              {invoice.customer.address && (
+                <p 
+                  className="mt-1"
+                  style={{
+                    fontSize: `${config.typography.body.size}px`,
+                    color: `rgb(${config.colors.darkGray.join(',')})`,
+                  }}
+                >
+                  {invoice.customer.address}
+                </p>
+              )}
+              {invoice.customer.email && (
+                <p 
+                  style={{
+                    fontSize: `${config.typography.body.size}px`,
+                    color: `rgb(${config.colors.darkGray.join(',')})`,
+                  }}
+                >
+                  {invoice.customer.email}
+                </p>
+              )}
             </div>
-            {invoice.dueDate && (
-              <div className="text-gray-600">
-                <span className="font-semibold">Due Date:</span>{' '}
-                {formatDate(invoice.dueDate)}
+            {config.sections.invoiceDates && (
+              <div className="text-right">
+                <div 
+                  className="mb-2"
+                  style={{
+                    fontSize: `${config.typography.body.size}px`,
+                    color: `rgb(${config.colors.darkGray.join(',')})`,
+                  }}
+                >
+                  <span className="font-semibold">Invoice Date:</span>{' '}
+                  {formatDateString(invoice.date)}
+                </div>
+                {invoice.dueDate && (
+                  <div 
+                    style={{
+                      fontSize: `${config.typography.body.size}px`,
+                      color: `rgb(${config.colors.darkGray.join(',')})`,
+                    }}
+                  >
+                    <span className="font-semibold">Due Date:</span>{' '}
+                    {formatDateString(invoice.dueDate)}
+                  </div>
+                )}
               </div>
             )}
           </div>
-        </div>
+        )}
 
         {/* Line Items */}
-        <div className="mb-8">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b-2 border-gray-300">
-                <th className="text-left py-4 px-4 font-bold text-gray-900">
-                  Description
-                </th>
-                <th className="text-center py-4 px-4 font-bold text-gray-900">
-                  Type
-                </th>
-                <th className="text-right py-4 px-4 font-bold text-gray-900">
-                  Qty/Hrs
-                </th>
-                <th className="text-right py-4 px-4 font-bold text-gray-900">
-                  Rate/Price
-                </th>
-                <th className="text-right py-4 px-4 font-bold text-gray-900">
-                  Amount
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoice.items.map((item, index) => (
-                <tr
-                  key={item.id}
-                  className={`border-b border-gray-200 ${
-                    index % 2 === 0 ? 'bg-gray-50' : ''
-                  }`}
+        {config.sections.itemsTable && (
+          <div className="mb-8">
+            <table className="w-full">
+              <thead>
+                <tr 
+                  style={{
+                    borderBottom: `1px solid rgb(${config.colors.borderGray.join(',')})`,
+                    backgroundColor: config.table.headerBackground 
+                      ? `rgb(${config.table.headerBackground.join(',')})`
+                      : 'transparent',
+                  }}
                 >
-                  <td className="py-4 px-4">
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {item.description}
-                      </p>
-                      {item.longDescription && (
-                        <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">
-                          {item.longDescription}
-                        </p>
-                      )}
-                      {item.type === 'TIME' && item.date && (
-                        <p className="text-sm text-gray-500 mt-1">
-                          {formatDate(item.date)}
-                        </p>
-                      )}
-                    </div>
-                  </td>
-                  <td className="text-center py-4 px-4">
-                    <span className="text-sm text-gray-600">{item.type}</span>
-                  </td>
-                  <td className="text-right py-4 px-4 text-gray-900">
-                    {item.type === 'TIME'
-                      ? item.hours?.toFixed(2) || '0.00'
-                      : item.quantity?.toFixed(2) || '0.00'}
-                  </td>
-                  <td className="text-right py-4 px-4 text-gray-900">
-                    {item.type === 'TIME'
-                      ? formatCurrency(item.hourlyRate || 0)
-                      : formatCurrency(item.unitPrice)}
-                  </td>
-                  <td className="text-right py-4 px-4 font-semibold text-gray-900">
-                    {formatCurrency(item.amount)}
-                  </td>
+                  {config.table.columns.includes('Service') && (
+                    <th 
+                      className="text-left py-4 px-4 font-bold"
+                      style={{
+                        fontSize: `${config.typography.tableHeader.size}px`,
+                        fontWeight: config.typography.tableHeader.style === 'bold' ? 'bold' : 'normal',
+                        color: config.table.headerTextColor
+                          ? `rgb(${config.table.headerTextColor.join(',')})`
+                          : `rgb(${config.colors.darkGray.join(',')})`,
+                      }}
+                    >
+                      Service
+                    </th>
+                  )}
+                  {config.table.columns.includes('Hours') && (
+                    <th 
+                      className="text-right py-4 px-4 font-bold"
+                      style={{
+                        fontSize: `${config.typography.tableHeader.size}px`,
+                        fontWeight: config.typography.tableHeader.style === 'bold' ? 'bold' : 'normal',
+                        color: config.table.headerTextColor
+                          ? `rgb(${config.table.headerTextColor.join(',')})`
+                          : `rgb(${config.colors.darkGray.join(',')})`,
+                      }}
+                    >
+                      Hours
+                    </th>
+                  )}
+                  {config.table.columns.includes('Amount') && (
+                    <th 
+                      className="text-right py-4 px-4 font-bold"
+                      style={{
+                        fontSize: `${config.typography.tableHeader.size}px`,
+                        fontWeight: config.typography.tableHeader.style === 'bold' ? 'bold' : 'normal',
+                        color: config.table.headerTextColor
+                          ? `rgb(${config.table.headerTextColor.join(',')})`
+                          : `rgb(${config.colors.darkGray.join(',')})`,
+                      }}
+                    >
+                      Amount
+                    </th>
+                  )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {invoice.items.map((item, index) => (
+                  <tr
+                    key={item.id}
+                    style={{
+                      borderBottom: `1px solid rgb(${config.colors.borderGray.join(',')})`,
+                      backgroundColor: config.table.showAlternatingRows && index % 2 === 1
+                        ? `rgb(${config.colors.lightGray.join(',')})`
+                        : 'transparent',
+                    }}
+                  >
+                    {config.table.columns.includes('Service') && (
+                      <td 
+                        className="py-4 px-4"
+                        style={{
+                          fontSize: `${config.typography.body.size}px`,
+                          color: `rgb(${config.colors.darkGray.join(',')})`,
+                        }}
+                      >
+                        <div>
+                          <p className="font-medium">{item.description}</p>
+                          {item.longDescription && (
+                            <p className="mt-1 whitespace-pre-wrap opacity-75">
+                              {item.longDescription}
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                    {config.table.columns.includes('Hours') && (
+                      <td 
+                        className="text-right py-4 px-4"
+                        style={{
+                          fontSize: `${config.typography.body.size}px`,
+                          color: `rgb(${config.colors.darkGray.join(',')})`,
+                        }}
+                      >
+                        {item.type === 'TIME'
+                          ? (item.hours || 0).toFixed(2)
+                          : (item.quantity || 0).toFixed(2)}
+                      </td>
+                    )}
+                    {config.table.columns.includes('Amount') && (
+                      <td 
+                        className="text-right py-4 px-4 font-semibold"
+                        style={{
+                          fontSize: `${config.typography.body.size}px`,
+                          color: `rgb(${config.colors.darkGray.join(',')})`,
+                        }}
+                      >
+                        {formatCurrencyAmount(item.amount)}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Totals */}
-        <div className="flex justify-end mb-8">
-          <div className="w-full md:w-1/3 space-y-3">
-            <div className="flex justify-between text-gray-700 text-lg">
-              <span>Subtotal:</span>
-              <span className="font-semibold">
-                {formatCurrency(invoice.subtotal)}
-              </span>
-            </div>
-            <div className="flex justify-between text-gray-700 text-lg">
-              <span>Tax:</span>
-              <span className="font-semibold">
-                {formatCurrency(invoice.tax)}
-              </span>
-            </div>
-            <div className="flex justify-between text-2xl font-bold text-gray-900 pt-3 border-t-2 border-gray-300">
-              <span>Total:</span>
-              <span>{formatCurrency(invoice.total)}</span>
+        {config.sections.totals && (
+          <div className="flex justify-end mb-8">
+            <div className="w-full md:w-1/3 space-y-3">
+              <div 
+                className="flex justify-between"
+                style={{
+                  fontSize: `${config.typography.body.size}px`,
+                  color: `rgb(${config.colors.darkGray.join(',')})`,
+                }}
+              >
+                <span>Subtotal:</span>
+                <span className="font-semibold">
+                  {formatCurrencyAmount(invoice.subtotal)}
+                </span>
+              </div>
+              <div 
+                className="flex justify-between"
+                style={{
+                  fontSize: `${config.typography.body.size}px`,
+                  color: `rgb(${config.colors.darkGray.join(',')})`,
+                }}
+              >
+                <span>Tax:</span>
+                <span className="font-semibold">
+                  {formatCurrencyAmount(invoice.tax)}
+                </span>
+              </div>
+              <div 
+                className="flex justify-between pt-3 border-t-2"
+                style={{
+                  fontSize: `${config.typography.total.size}px`,
+                  fontWeight: config.typography.total.style === 'bold' ? 'bold' : 'normal',
+                  color: `rgb(${config.colors.darkGray.join(',')})`,
+                  borderTopColor: `rgb(${config.colors.borderGray.join(',')})`,
+                }}
+              >
+                <span>Total:</span>
+                <span>{formatCurrencyAmount(invoice.total)}</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Notes */}
-        {invoice.notes && (
-          <div className="pt-6 border-t border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Notes:</h3>
-            <p className="text-gray-600 whitespace-pre-wrap">{invoice.notes}</p>
+        {config.sections.notes && invoice.notes && (
+          <div 
+            className="pt-6 border-t"
+            style={{
+              borderTopColor: `rgb(${config.colors.borderGray.join(',')})`,
+            }}
+          >
+            <h3 
+              className="font-semibold mb-2"
+              style={{
+                fontSize: `${config.typography.body.size}px`,
+                color: `rgb(${config.colors.darkGray.join(',')})`,
+              }}
+            >
+              Notes:
+            </h3>
+            <p 
+              className="whitespace-pre-wrap"
+              style={{
+                fontSize: `${config.typography.body.size}px`,
+                color: `rgb(${config.colors.darkGray.join(',')})`,
+              }}
+            >
+              {invoice.notes}
+            </p>
           </div>
         )}
 
         {/* Footer */}
-        <div className="mt-12 pt-6 border-t border-gray-200 text-center text-sm text-gray-500">
-          <p>Thank you for your business!</p>
-        </div>
+        {config.sections.footer && config.footer && config.footer.showThankYou && (
+          <div 
+            className="mt-12 pt-6 border-t text-center"
+            style={{
+              borderTopColor: `rgb(${config.colors.borderGray.join(',')})`,
+              fontSize: `${config.typography.body.size}px`,
+              color: `rgb(${config.colors.darkGray.join(',')})`,
+            }}
+          >
+            <p>Thank you for your business!</p>
+          </div>
+        )}
       </div>
 
       <style dangerouslySetInnerHTML={{

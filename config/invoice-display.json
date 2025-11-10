@@ -1,0 +1,59 @@
+{
+  "colors": {
+    "primary": [41, 99, 235],
+    "darkGray": [45, 45, 45],
+    "lightGray": [247, 248, 250],
+    "borderGray": [224, 224, 224]
+  },
+  "layout": {
+    "pageSize": "letter",
+    "orientation": "portrait",
+    "margin": 24,
+    "headerHeight": 40,
+    "sectionSpacing": 14
+  },
+  "typography": {
+    "companyName": { "size": 14, "style": "bold" },
+    "invoiceTitle": { "size": 22, "style": "bold" },
+    "invoiceNumber": { "size": 10, "style": "normal" },
+    "body": { "size": 9, "style": "normal" },
+    "tableHeader": { "size": 9, "style": "bold" },
+    "total": { "size": 11, "style": "bold" }
+  },
+  "logo": {
+    "enabled": false,
+    "text": "",
+    "size": 0,
+    "position": { "x": 0, "y": 0 },
+    "backgroundColor": ""
+  },
+  "sections": {
+    "logo": false,
+    "companyInfo": true,
+    "billTo": true,
+    "invoiceDates": true,
+    "itemsTable": true,
+    "totals": true,
+    "notes": true,
+    "footer": false
+  },
+  "table": {
+    "columns": ["Service", "Hours", "Amount"],
+    "showAlternatingRows": false,
+    "rowSpacing": 4
+  },
+  "dateFormat": {
+    "format": "MMMM d, yyyy",
+    "locale": "en-US"
+  },
+  "currency": {
+    "symbol": "$",
+    "decimalPlaces": 2,
+    "locale": "en-US"
+  },
+  "footer": {
+    "text": "",
+    "showThankYou": false
+  }
+}
+

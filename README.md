@@ -1,6 +1,19 @@
-# BlueBird Accounting Application
+# BlueJay Accounting Application
 
 A modern business accounting application built with Next.js, TypeScript, and PostgreSQL. Designed specifically for consultants who bill hourly, with support for services and products.
+
+**Version:** 1.1.0
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) - System architecture and technical overview
+- [API Documentation](docs/API.md) - API endpoints and usage
+- [Database Schema](docs/DATABASE.md) - Database models and relationships
+- [Deployment Guide](docs/DEPLOYMENT.md) - How to deploy the application
+- [User Guide](docs/USER_GUIDE.md) - End-user documentation
+- [Developer Guide](docs/DEVELOPER_GUIDE.md) - Development setup and guidelines
+- [TODO](TODO.md) - Remaining tasks and planned features
+- [CHANGELOG](CHANGELOG.md) - Version history and changes
 
 ## Features
 
@@ -10,8 +23,20 @@ A modern business accounting application built with Next.js, TypeScript, and Pos
   - Print invoices
   - Send invoices via email
   - Visual invoice form builder
+  - Configurable invoice formatting (colors, typography, layout, sections)
+  - Customizable PDF generation with watermark and metadata support
 - **Customer Management**: Track customers and their information
-- **Reports**: View financial reports and analytics
+- **Reports**: Comprehensive financial reporting with 6 report types
+  - Profit & Loss
+  - Accounts Receivable Aging
+  - Sales by Customer
+  - Sales by Type
+  - Tax Summary
+  - Invoice Summary
+- **Settings**: 
+  - Company information management
+  - Time entry templates
+  - Invoice display and print/PDF customization
 
 ## Tech Stack
 
@@ -86,8 +111,16 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 /prisma
   schema.prisma     # Database schema
 /lib
-  db.ts            # Prisma client
-  email.ts         # Email utilities
+  db.ts                    # Prisma client
+  email.ts                 # Email utilities
+  invoice-config.ts        # Invoice configuration TypeScript types
+  invoice-config-loader.ts # Configuration loader functions
+  date-formatter.ts        # Date formatting utilities
+  currency-formatter.ts    # Currency formatting utilities
+  pdf-jspdf.ts            # PDF generation using jsPDF
+/config
+  invoice-display.json     # Invoice display configuration
+  invoice-print.json       # Invoice print/PDF configuration
 ```
 
 ## Key Features for Consultants
@@ -136,6 +169,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - `GET/POST /api/customers` - List/create customers
 - `GET /api/dashboard/stats` - Dashboard statistics
 - `GET/POST /api/invoices/template` - Invoice template management
+- `GET/PUT /api/invoice-config` - Load/save invoice configuration (display and print)
+- `GET /api/reports/[reportId]` - Generate financial reports (profit-loss, accounts-receivable, sales-by-customer, sales-by-type, tax-summary, invoice-summary)
 
 ## Development
 

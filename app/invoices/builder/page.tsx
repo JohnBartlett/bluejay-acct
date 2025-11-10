@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Save, Eye, GripVertical } from 'lucide-react'
+import { Version } from '@/components/Version'
 
 interface TemplateField {
   id: string
@@ -247,6 +248,7 @@ export default function InvoiceBuilderPage() {
           </div>
         </div>
       </div>
+      <Version />
     </div>
   )
 }
