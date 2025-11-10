@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 255, 255, 255;
+  --background-end-rgb: 255, 255, 255;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Print styles for invoice pages */
+@media print {
+  /* Hide sidebar */
+  [data-sidebar] {
+    display: none !important;
+  }
+  
+  /* Hide header */
+  [data-header] {
+    display: none !important;
+  }
+  
+  /* Hide print controls */
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Make the main flex container full width and remove flex */
+  [data-app-layout] {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    background: white !important;
+  }
+  
+  /* Remove padding from main content area */
+  [data-app-layout] > div > main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* Ensure invoice container is visible and properly sized */
+  .invoice-print-container {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 1cm !important;
+    background: white !important;
+  }
+  
+  /* Reset body */
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Page setup */
+  @page {
+    margin: 1cm;
+    size: letter;
+  }
+  
+  /* Prevent page breaks in tables */
+  table {
+    page-break-inside: avoid;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+  }
+}
+

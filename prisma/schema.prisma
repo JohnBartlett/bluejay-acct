@@ -1,0 +1,118 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Company {
+  id              String   @id @default(cuid())
+  name            String
+  address         String?
+  logo            String?
+  email           String?
+  phone           String?
+  fiscalYearEnd   String?  @default("December 31")
+  currency        String   @default("USD")
+  defaultHourlyRate Float? @default(0)
+  users           User[]
+  customers       Customer[]
+  invoices        Invoice[]
+  timeTemplates   TimeEntryTemplate[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Customer {
+  id        String    @id @default(cuid())
+  name      String
+  email     String?
+  address   String?
+  phone     String?
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  invoices  Invoice[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Invoice {
+  id            String       @id @default(cuid())
+  invoiceNumber String       @unique
+  customerId    String
+  customer      Customer     @relation(fields: [customerId], references: [id])
+  date          DateTime     @default(now())
+  dueDate       DateTime?
+  status        InvoiceStatus @default(DRAFT)
+  subtotal      Float        @default(0)
+  tax           Float        @default(0)
+  total         Float        @default(0)
+  notes         String?
+  companyId     String
+  company       Company      @relation(fields: [companyId], references: [id])
+  items         InvoiceItem[]
+  emailSentAt   DateTime?    // When invoice email was sent
+  emailOpenedAt DateTime?    // When invoice email was opened/read
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model InvoiceItem {
+  id              String         @id @default(cuid())
+  invoiceId       String
+  invoice         Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  type            InvoiceItemType
+  description     String
+  longDescription String?        // Detailed description/notes for the item
+  date            DateTime?      // For time entries
+  hours           Float?         // For time entries
+  hourlyRate      Float?         // For time entries
+  quantity        Float?         @default(1) // For services/products
+  unitPrice       Float          @default(0)
+  amount          Float          @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model TimeEntryTemplate {
+  id          String   @id @default(cuid())
+  description String
+  hourlyRate  Float?
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum InvoiceItemType {
+  TIME
+  SERVICE
+  PRODUCT
+}
