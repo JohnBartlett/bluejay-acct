@@ -255,7 +255,7 @@ npm run db:push
 - The application currently uses a default company ID. In production, implement proper authentication and multi-tenancy.
 - Email functionality requires a Resend API key. For development, you can use nodemailer or mock the email sending.
 - PDF generation for email attachments is simplified. Consider using a proper PDF library like `@react-pdf/renderer` or `puppeteer` for production.
-- `https://app.2cch.com` is fronted by Cloudflare and proxied into the local dev machine via `cloudflared`. Two launch agents (`com.bluebird.devserver`, `com.bluebird.tunnel`) auto-start the Next.js dev server and tunnel after every reboot. Use `launchctl list | grep bluebird` to confirm they are running, and check logs under `~/Library/Logs/BlueBird/`.
+- `https://app.2cch.com` is fronted by Cloudflare and proxied into the local dev machine via `cloudflared`. Two launch agents (`com.bluebird.devserver`, `com.bluebird.tunnel`) auto-start the Next.js dev server and tunnel after every reboot. Use `launchctl list | grep bluebird` to confirm they are running, and check logs under `~/Library/Logs/BlueBird/`. Run `./scripts/prune-logs.sh` occasionally to truncate the log files.
 
 ## License
 
